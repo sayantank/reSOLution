@@ -30,6 +30,29 @@ pub mod resolution {
         lockup_duration: i64,
         text: String,
     ) -> Result<()> {
+        let approvers: Vec<Pubkey> = ctx
+            .remaining_accounts
+            .iter()
+            .map(|account| account.key())
+            .collect();
+
+        if approvers.len() != 3 {
+            return Err(ResolutionErrorCode::InvalidNumApprovers.into());
+        }
+
+        // owner shouldn't be in the approvers list
+        if approvers.contains(&ctx.accounts.owner.key()) {
+            return Err(ResolutionErrorCode::InvalidApprover.into());
+        }
+
+        // check if all approvers are unique
+        let mut unique_approvers = approvers.clone();
+        unique_approvers.sort();
+        unique_approvers.dedup();
+        if unique_approvers.len() != approvers.len() {
+            return Err(ResolutionErrorCode::InvalidApprover.into());
+        }
+
         let now = Clock::get()?.unix_timestamp;
         let lockup_end = now + lockup_duration;
 
@@ -103,17 +126,6 @@ pub mod resolution {
         )?;
 
         let resolution = &mut ctx.accounts.resolution_account;
-
-        // check if ctx.remaining_accounts length is between 3 and 5
-        if ctx.remaining_accounts.len() < 3 || ctx.remaining_accounts.len() > 5 {
-            return Err(ResolutionErrorCode::InvalidNumApprovers.into());
-        }
-
-        let approvers: Vec<Pubkey> = ctx
-            .remaining_accounts
-            .iter()
-            .map(|account| account.key())
-            .collect();
 
         resolution.owner = ctx.accounts.owner.key();
         resolution.text = text;
@@ -360,7 +372,7 @@ pub struct ResolutionAccount {
     owner: Pubkey,
     #[max_len(512)]
     text: String,
-    #[max_len(5)]
+    #[max_len(3)]
     approvers: Vec<Pubkey>,
     num_approvals: u8,
     stake_amount: u64,

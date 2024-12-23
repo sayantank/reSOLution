@@ -235,7 +235,106 @@ describe("resolution", async () => {
       stakeProgram: new anchor.web3.PublicKey("Stake11111111111111111111111111111111111111"),
       stakeHistory: anchor.web3.SYSVAR_STAKE_HISTORY_PUBKEY,
     }).signers([payer]).rpc();
+  })
 
+  it("duplicate approvers", async () => {
+    try {
+      const newStakeKeypair = Keypair.generate();
+
+    await program.methods.initializeResolution(new anchor.BN(5_000_000_000), new anchor.BN(365 * 24 * 60 * 60*1000), "New Resolution").accounts({
+      owner: payer.publicKey,
+      stakeAccount: newStakeKeypair.publicKey,
+      validatorVoteAccount: voteAccountPubkey,
+      stakeProgram: new anchor.web3.PublicKey("Stake11111111111111111111111111111111111111"),
+      stakeConfig: new anchor.web3.PublicKey("StakeConfig11111111111111111111111111111111"),
+    }).remainingAccounts([
+      {
+        isSigner: false,
+        isWritable: false,
+        pubkey: approverA.publicKey,
+      },
+      {
+        isSigner: false,
+        isWritable: false,
+        pubkey: approverA.publicKey,
+      },
+      {
+        isSigner: false,
+        isWritable: false,
+        pubkey: approverC.publicKey,
+      },
+    ]).signers([payer, newStakeKeypair]).rpc();
+    assert.fail("Expected an error to be thrown");
+    }
+    catch (error) {
+      expect(error).to.be.instanceOf(AnchorError);
+      expect(error.error.errorCode.code).to.equal("InvalidApprover");
+    }
+  })
+
+  it("self approver", async() => {
+    try {
+      const newStakeKeypair = Keypair.generate();
+
+    await program.methods.initializeResolution(new anchor.BN(5_000_000_000), new anchor.BN(365 * 24 * 60 * 60*1000), "New Resolution").accounts({
+      owner: payer.publicKey,
+      stakeAccount: newStakeKeypair.publicKey,
+      validatorVoteAccount: voteAccountPubkey,
+      stakeProgram: new anchor.web3.PublicKey("Stake11111111111111111111111111111111111111"),
+      stakeConfig: new anchor.web3.PublicKey("StakeConfig11111111111111111111111111111111"),
+    }).remainingAccounts([
+      {
+        isSigner: false,
+        isWritable: false,
+        pubkey: approverA.publicKey,
+      },
+      {
+        isSigner: false,
+        isWritable: false,
+        pubkey: payer.publicKey,
+      },
+      {
+        isSigner: false,
+        isWritable: false,
+        pubkey: approverC.publicKey,
+      },
+    ]).signers([payer, newStakeKeypair]).rpc();
+    assert.fail("Expected an error to be thrown");
+    }
+    catch (error) {
+      expect(error).to.be.instanceOf(AnchorError);
+      expect(error.error.errorCode.code).to.equal("InvalidApprover");
+    }
+  })
+
+  it("invalid number of approvers", async () => {
+    try {
+      const newStakeKeypair = Keypair.generate();
+
+    await program.methods.initializeResolution(new anchor.BN(5_000_000_000), new anchor.BN(365 * 24 * 60 * 60*1000), "New Resolution").accounts({
+      owner: payer.publicKey,
+      stakeAccount: newStakeKeypair.publicKey,
+      validatorVoteAccount: voteAccountPubkey,
+      stakeProgram: new anchor.web3.PublicKey("Stake11111111111111111111111111111111111111"),
+      stakeConfig: new anchor.web3.PublicKey("StakeConfig11111111111111111111111111111111"),
+    }).remainingAccounts([
+      {
+        isSigner: false,
+        isWritable: false,
+        pubkey: approverA.publicKey,
+      },
+      {
+        isSigner: false,
+        isWritable: false,
+        pubkey: approverB.publicKey,
+      }
+    ]).signers([payer, newStakeKeypair]).rpc();
+    assert.fail("Expected an error to be thrown");
+    }
+    catch (error) {
+      expect(error).to.be.instanceOf(AnchorError);
+      expect(error.error.errorCode.code).to.equal("InvalidNumApprovers");
+    }
   })
 
 });
