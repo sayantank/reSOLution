@@ -100,7 +100,7 @@ describe("resolution", async () => {
     expect(resolutionAccount.approvers[0].toString()).to.equal(approverA.publicKey.toString());
     expect(resolutionAccount.approvers[1].toString()).to.equal(approverB.publicKey.toString());
     expect(resolutionAccount.approvers[2].toString()).to.equal(approverC.publicKey.toString());
-    expect(resolutionAccount.numApprovals).to.equal(0);
+    expect(resolutionAccount.approvedBy.length).to.equal(0);
     expect(resolutionAccount.stakeAmount.toNumber()).to.equal(5_000_000_000);
     expect(resolutionAccount.stakeAccount.toString()).to.equal(stakeKeypair.publicKey.toString());
 
@@ -115,7 +115,23 @@ describe("resolution", async () => {
    }).signers([approverA]).rpc();
 
     const resolutionAccount = await program.account.resolutionAccount.fetch(resolutionPDA);
-    expect(resolutionAccount.numApprovals).to.equal(1);
+    expect(resolutionAccount.approvedBy.length).to.equal(1);
+    expect(resolutionAccount.approvedBy[0].toString()).to.equal(approverA.publicKey.toString());
+  })
+
+  it("double approval not allowed", async () => {
+    try {
+      await program.methods.approveResolution().accountsStrict({
+        signer: approverA.publicKey,
+        owner: payer.publicKey,
+        resolutionAccount: resolutionPDA,
+       }).signers([approverA]).rpc();
+       assert.fail("Expected an error to be thrown");
+    }
+    catch (error) {
+      expect(error).to.be.instanceOf(AnchorError);
+      expect(error.error.errorCode.code).to.equal("AlreadyApproved");
+    }
   })
 
   it("attempt close before approval", async () => {
@@ -198,6 +214,13 @@ describe("resolution", async () => {
       },
     ]).signers([payer, newStakeKeypair]).rpc();
 
+    const payerBalanceBefore = await banksClient.getBalance(payer.publicKey);
+    const stakeAccountBalanceBefore = await banksClient.getBalance(newStakeKeypair.publicKey);
+    console.log("Before", {
+      payerBalanceBefore: payerBalanceBefore.toString(),
+      stakeAccountBalanceBefore: stakeAccountBalanceBefore.toString(),
+    })
+
     await program.methods.deactivateResolutionStake().accountsStrict({
       owner: payer.publicKey,
       stakeAccount: newStakeKeypair.publicKey,
@@ -235,6 +258,15 @@ describe("resolution", async () => {
       stakeProgram: new anchor.web3.PublicKey("Stake11111111111111111111111111111111111111"),
       stakeHistory: anchor.web3.SYSVAR_STAKE_HISTORY_PUBKEY,
     }).signers([payer]).rpc();
+
+    const payerBalanceAfter = await banksClient.getBalance(payer.publicKey);
+    const stakeAccountBalanceAfter = await banksClient.getBalance(newStakeKeypair.publicKey);
+    console.log("After", {
+      payerBalanceAfter: payerBalanceAfter.toString(),
+      stakeAccountBalanceAfter: stakeAccountBalanceAfter.toString(),
+      diff: (payerBalanceAfter - payerBalanceBefore).toString(),
+    })
+
   })
 
   it("duplicate approvers", async () => {

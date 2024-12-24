@@ -16,6 +16,8 @@ pub enum ResolutionErrorCode {
     NotEnoughApprovals,
     #[msg("Invalid approver")]
     InvalidApprover,
+    #[msg("Already approved")]
+    AlreadyApproved,
     #[msg("Invalid resolution signature")]
     InvalidResolutionSignature,
     #[msg("Lockup in force")]

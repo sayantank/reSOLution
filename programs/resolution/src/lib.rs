@@ -17,7 +17,7 @@ use anchor_lang::solana_program::{
 pub use constants::*;
 use error::ResolutionErrorCode;
 
-declare_id!("Cupn6sXQ7RbpQDCibQXR1L55JgpaKZ7eQYhg5RDjpZPP");
+declare_id!("C3YcwAaUtby4vHGvJ9dRUNe4UiPMLVfLp89XZG1vQeFy");
 
 #[program]
 pub mod resolution {
@@ -130,7 +130,7 @@ pub mod resolution {
         resolution.owner = ctx.accounts.owner.key();
         resolution.text = text;
         resolution.approvers = approvers;
-        resolution.num_approvals = 0;
+        resolution.approved_by = [].to_vec();
         resolution.stake_amount = stake_amount;
         resolution.stake_account = ctx.accounts.stake_account.key();
         resolution.start_time = now;
@@ -148,7 +148,11 @@ pub mod resolution {
             return Err(ResolutionErrorCode::InvalidApprover.into());
         }
 
-        resolution.num_approvals += 1;
+        if resolution.approved_by.contains(&ctx.accounts.signer.key()) {
+            return Err(ResolutionErrorCode::AlreadyApproved.into());
+        }
+
+        resolution.approved_by.push(ctx.accounts.signer.key());
 
         Ok(())
     }
@@ -183,13 +187,16 @@ pub mod resolution {
         let resolution = &mut ctx.accounts.resolution_account;
 
         let is_approved =
-            resolution.num_approvals >= resolution.approvers.len().try_into().unwrap();
+            resolution.approved_by.len() >= resolution.approvers.len().try_into().unwrap();
 
         // If resolution is not yet approved,
         // then it's not possible to close the resolution before the end time
         if !is_approved && now < resolution.end_time {
             return Err(ResolutionErrorCode::LockupInForce.into());
         }
+
+        // Empty the whole stake account
+        let withdraw_amount = ctx.accounts.stake_account.lamports();
 
         match is_approved {
             true => {
@@ -204,7 +211,7 @@ pub mod resolution {
                         &ctx.accounts.stake_account.key(),
                         &ctx.accounts.owner.key(),
                         &ctx.accounts.owner.key(),
-                        resolution.stake_amount,
+                        withdraw_amount,
                         Some(&resolution_key),
                     ),
                     &[
@@ -224,7 +231,7 @@ pub mod resolution {
                         &ctx.accounts.stake_account.key(),
                         &ctx.accounts.owner.key(),
                         &ctx.accounts.owner.key(),
-                        resolution.stake_amount,
+                        withdraw_amount,
                         None,
                     ),
                     &[
@@ -374,7 +381,8 @@ pub struct ResolutionAccount {
     text: String,
     #[max_len(3)]
     approvers: Vec<Pubkey>,
-    num_approvals: u8,
+    #[max_len(3)]
+    approved_by: Vec<Pubkey>,
     stake_amount: u64,
     stake_account: Pubkey,
     start_time: i64,
