@@ -3,6 +3,7 @@ pub mod error;
 
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{
+    incinerator,
     program::{invoke, invoke_signed},
     stake::{
         self,
@@ -17,7 +18,7 @@ use anchor_lang::solana_program::{
 pub use constants::*;
 use error::ResolutionErrorCode;
 
-declare_id!("C3YcwAaUtby4vHGvJ9dRUNe4UiPMLVfLp89XZG1vQeFy");
+declare_id!("3P9v3idHKsRsSg3FfwBE5YjPTzzdq4We4BVhvmZftmxZ");
 
 #[program]
 pub mod resolution {
@@ -195,17 +196,28 @@ pub mod resolution {
             return Err(ResolutionErrorCode::LockupInForce.into());
         }
 
-        // Empty the whole stake account
-        let withdraw_amount = ctx.accounts.stake_account.lamports();
+        // Calculate withdraw amount and burn amount
+        // If approved, withdraw all stake account balance
+        // If not approved, withdraw the stake amount and burn the rest (rewards+rent)
+        let (withdraw_amount, burn_amount) = if is_approved {
+            (ctx.accounts.stake_account.lamports(), 0 as u64)
+        } else {
+            (
+                resolution.stake_amount,
+                ctx.accounts.stake_account.lamports() - resolution.stake_amount,
+            )
+        };
+
+        let signer_seeds: &[&[&[u8]]] = &[&[
+            b"resolution",
+            ctx.accounts.owner.key.as_ref(),
+            &[ctx.bumps.resolution_account],
+        ]];
+
+        msg!("Withdraw amount: {}", withdraw_amount);
 
         match is_approved {
             true => {
-                let signer_seeds: &[&[&[u8]]] = &[&[
-                    b"resolution",
-                    ctx.accounts.owner.key.as_ref(),
-                    &[ctx.bumps.resolution_account],
-                ]];
-
                 invoke_signed(
                     &withdraw(
                         &ctx.accounts.stake_account.key(),
@@ -243,6 +255,29 @@ pub mod resolution {
                     ],
                 )?;
             }
+        }
+
+        msg!("Burn amount: {}", burn_amount);
+
+        if burn_amount > 0 {
+            invoke_signed(
+                &withdraw(
+                    &ctx.accounts.stake_account.key(),
+                    &ctx.accounts.owner.key(),
+                    &ctx.accounts.incinerator_account.key(),
+                    burn_amount,
+                    Some(&resolution_key),
+                ),
+                &[
+                    ctx.accounts.stake_account.to_account_info(),
+                    ctx.accounts.incinerator_account.to_account_info(),
+                    ctx.accounts.clock.to_account_info(),
+                    ctx.accounts.stake_history.to_account_info(),
+                    ctx.accounts.owner.to_account_info(),
+                    ctx.accounts.resolution_account.to_account_info(),
+                ],
+                signer_seeds,
+            )?;
         }
 
         Ok(())
@@ -365,6 +400,13 @@ pub struct CloseResolution<'info> {
     pub clock: Sysvar<'info, Clock>,
     pub stake_history: Sysvar<'info, StakeHistory>,
 
+    /// CHECK: We validate that the account key is the Incinerator account
+    #[account(
+        mut,
+        constraint = incinerator_account.key() == incinerator::id()
+    )]
+    pub incinerator_account: AccountInfo<'info>,
+
     /// CHECK: We validate the program ID in the instruction
     #[account(
         executable,
@@ -377,7 +419,7 @@ pub struct CloseResolution<'info> {
 #[derive(InitSpace, Debug)]
 pub struct ResolutionAccount {
     owner: Pubkey,
-    #[max_len(512)]
+    #[max_len(256)]
     text: String,
     #[max_len(3)]
     approvers: Vec<Pubkey>,

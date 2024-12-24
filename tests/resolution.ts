@@ -33,8 +33,13 @@ describe("resolution", async () => {
     approverA: Keypair,
     approverB: Keypair,
     approverC: Keypair,
-    resolutionPDA: PublicKey;
+    resolutionPDA: PublicKey,
+    resolutionAccountRent: bigint,
+    stakeAccountRent: bigint;
 
+  let incineratorPubkey = new PublicKey("1nc1nerator11111111111111111111111111111111")
+  let stakeAmount = 5_000_000_000n;
+  let txFees = 5000n;
 
   before(async function () {
     voteAccountPubkey = new PublicKey(voteAccount.pubkey);
@@ -62,10 +67,15 @@ describe("resolution", async () => {
     approverB = new Keypair();
     approverC = new Keypair();
     stakeKeypair = Keypair.generate();
+
+    const rent = await banksClient.getRent()
+    resolutionAccountRent = rent.minimumBalance(557n);
+    stakeAccountRent = rent.minimumBalance(200n);
+
   });
 
   it("initialize resolution", async () => {
-    await program.methods.initializeResolution(new anchor.BN(5_000_000_000), new anchor.BN(365 * 24 * 60 * 60*1000), "Hello World").accounts({
+    await program.methods.initializeResolution(new anchor.BN(5_000_000_000), new anchor.BN(365 * 24 * 60 * 60), "Hello World").accounts({
       owner: payer.publicKey,
       stakeAccount: stakeKeypair.publicKey,
       validatorVoteAccount: voteAccountPubkey,
@@ -120,6 +130,10 @@ describe("resolution", async () => {
   })
 
   it("double approval not allowed", async () => {
+
+    // // Add small delay to ensure clock update is processed
+    await new Promise(resolve => setTimeout(resolve, 500));
+
     try {
       await program.methods.approveResolution().accountsStrict({
         signer: approverA.publicKey,
@@ -143,6 +157,7 @@ describe("resolution", async () => {
         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
         stakeProgram: new anchor.web3.PublicKey("Stake11111111111111111111111111111111111111"),
         stakeHistory: anchor.web3.SYSVAR_STAKE_HISTORY_PUBKEY,
+        incineratorAccount: incineratorPubkey,
       }).signers([payer]).rpc();
       assert.fail("Expected an error to be thrown");
     } catch (error) {
@@ -174,6 +189,9 @@ describe("resolution", async () => {
       stakeProgram: new anchor.web3.PublicKey("Stake11111111111111111111111111111111111111"),
     }).signers([payer]).rpc();
 
+    const payerBalanceBefore = await banksClient.getBalance(payer.publicKey);
+    const stakeAccountBalanceBefore = await banksClient.getBalance(stakeKeypair.publicKey);   
+
 
      await program.methods.closeResolution().accountsStrict({
       owner: payer.publicKey,
@@ -182,8 +200,17 @@ describe("resolution", async () => {
       clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
       stakeProgram: new anchor.web3.PublicKey("Stake11111111111111111111111111111111111111"),
       stakeHistory: anchor.web3.SYSVAR_STAKE_HISTORY_PUBKEY,
+      incineratorAccount: incineratorPubkey,
     }).signers([payer]).rpc();
 
+    const payerBalanceAfter = await banksClient.getBalance(payer.publicKey);
+    const stakeAccountBalanceAfter = await banksClient.getBalance(stakeKeypair.publicKey);
+    
+    expect(stakeAccountBalanceAfter).equals(0n);
+  
+    if(payerBalanceAfter + txFees !== payerBalanceBefore + stakeAmount + resolutionAccountRent + stakeAccountRent) {
+      assert.fail("Expected withdrawal to be greater than stake amount");
+    }
   })
 
   it("close resolution after lockup", async () => {
@@ -214,12 +241,7 @@ describe("resolution", async () => {
       },
     ]).signers([payer, newStakeKeypair]).rpc();
 
-    const payerBalanceBefore = await banksClient.getBalance(payer.publicKey);
-    const stakeAccountBalanceBefore = await banksClient.getBalance(newStakeKeypair.publicKey);
-    console.log("Before", {
-      payerBalanceBefore: payerBalanceBefore.toString(),
-      stakeAccountBalanceBefore: stakeAccountBalanceBefore.toString(),
-    })
+   
 
     await program.methods.deactivateResolutionStake().accountsStrict({
       owner: payer.publicKey,
@@ -237,6 +259,7 @@ describe("resolution", async () => {
         clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
         stakeProgram: new anchor.web3.PublicKey("Stake11111111111111111111111111111111111111"),
         stakeHistory: anchor.web3.SYSVAR_STAKE_HISTORY_PUBKEY,
+        incineratorAccount: incineratorPubkey,
       }).signers([payer]).rpc();
       assert.fail("Expected an error to be thrown");
     } catch (error) {
@@ -250,6 +273,13 @@ describe("resolution", async () => {
     // Add small delay to ensure clock update is processed
     await new Promise(resolve => setTimeout(resolve, 100));
 
+    const payerBalanceBefore = await banksClient.getBalance(payer.publicKey);
+    const stakeAccountBalanceBefore = await banksClient.getBalance(newStakeKeypair.publicKey);
+    console.log("Before", {
+      payerBalanceBefore: payerBalanceBefore.toString(),
+      stakeAccountBalanceBefore: stakeAccountBalanceBefore.toString(),
+    })
+
     await program.methods.closeResolution().accountsStrict({
       owner: payer.publicKey,
       stakeAccount: newStakeKeypair.publicKey,
@@ -257,15 +287,17 @@ describe("resolution", async () => {
       clock: anchor.web3.SYSVAR_CLOCK_PUBKEY,
       stakeProgram: new anchor.web3.PublicKey("Stake11111111111111111111111111111111111111"),
       stakeHistory: anchor.web3.SYSVAR_STAKE_HISTORY_PUBKEY,
+      incineratorAccount: incineratorPubkey,
     }).signers([payer]).rpc();
 
     const payerBalanceAfter = await banksClient.getBalance(payer.publicKey);
     const stakeAccountBalanceAfter = await banksClient.getBalance(newStakeKeypair.publicKey);
-    console.log("After", {
-      payerBalanceAfter: payerBalanceAfter.toString(),
-      stakeAccountBalanceAfter: stakeAccountBalanceAfter.toString(),
-      diff: (payerBalanceAfter - payerBalanceBefore).toString(),
-    })
+
+    expect(stakeAccountBalanceAfter).equals(0n);
+
+    if(payerBalanceAfter + txFees !== payerBalanceBefore + stakeAmount + resolutionAccountRent) {
+      assert.fail("Expected withdrawal to be greater than stake amount");
+    }
 
   })
 

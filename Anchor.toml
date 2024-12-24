@@ -5,9 +5,9 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-resolution = "C3YcwAaUtby4vHGvJ9dRUNe4UiPMLVfLp89XZG1vQeFy"
+resolution = "3P9v3idHKsRsSg3FfwBE5YjPTzzdq4We4BVhvmZftmxZ"
 [programs.devnet]
-resolution = "C3YcwAaUtby4vHGvJ9dRUNe4UiPMLVfLp89XZG1vQeFy"
+resolution = "3P9v3idHKsRsSg3FfwBE5YjPTzzdq4We4BVhvmZftmxZ"
 
 [registry]
 url = "https://api.apr.dev"
