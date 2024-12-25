@@ -40,3 +40,6 @@ The smart contract includes the following main functions:
 - `deactivate_resolution_stake`: Deactivate staking when resolution ends
 - `close_resolution`: Claim funds based on resolution outcome
 
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
