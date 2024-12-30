@@ -18,7 +18,7 @@ use anchor_lang::solana_program::{
 pub use constants::*;
 use error::ResolutionErrorCode;
 
-declare_id!("3P9v3idHKsRsSg3FfwBE5YjPTzzdq4We4BVhvmZftmxZ");
+declare_id!("6nGFQ3vek6SST6AhmfCeii2pj7GK2yiF2FkgeJUvXJPU");
 
 #[program]
 pub mod resolution {

@@ -1,6 +1,7 @@
 .anchor
 .DS_Store
 target
+verifiable-target
 **/*.rs.bk
 node_modules
 test-ledger

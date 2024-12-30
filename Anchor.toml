@@ -5,12 +5,11 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-resolution = "3P9v3idHKsRsSg3FfwBE5YjPTzzdq4We4BVhvmZftmxZ"
+resolution = "6nGFQ3vek6SST6AhmfCeii2pj7GK2yiF2FkgeJUvXJPU"
 [programs.devnet]
-resolution = "3P9v3idHKsRsSg3FfwBE5YjPTzzdq4We4BVhvmZftmxZ"
-
-[registry]
-url = "https://api.apr.dev"
+resolution = "6nGFQ3vek6SST6AhmfCeii2pj7GK2yiF2FkgeJUvXJPU"
+[programs.mainnet]
+resolution = "6nGFQ3vek6SST6AhmfCeii2pj7GK2yiF2FkgeJUvXJPU"
 
 [provider]
 cluster = "Localnet"
